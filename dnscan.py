@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.11
 #
 # dnscan copyright (C) 2013-2014 rbsec
 # Licensed under GPLv3, see LICENSE for details
@@ -68,13 +68,10 @@ class scanner(threading.Thread):
                     nameservers = sorted(list(res))
                     ns0 = str(nameservers[0])[:-1]  # First nameserver
                     print('\033[K\r', end='')
-                    print(domain + " - " + col.brown + ns0 + col.end)
+                    print(domain + " | " + col.brown + ns0 + col.end)
                     if outfile:
-                        print(ns0 + " - " + domain, file=outfile)
+                        print(ns0 + " | " + domain, file=outfile)
                 if args.tld:
-                    if res:
-                        print('\033[K\r', end='')
-                        print(domain + " - " + res)
                     return
                 for rdata in res:
                     address = rdata.address
@@ -87,14 +84,14 @@ class scanner(threading.Thread):
                         print(col.brown + domain + col.end)
                         break
                     elif args.domain_first:
-                        print(domain + " - " + col.brown + address + col.end)
+                        print(domain + " | " + col.brown + address + col.end)
                     else:
-                        print(address + " - " + col.brown + domain + col.end)
+                        print(address + " | " + col.brown + domain + col.end)
                     if outfile:
                         if args.domain_first:
-                            print(domain + " - " + address, file=outfile)
+                            print(domain + " | " + address, file=outfile)
                         else:
-                            print(address + " - " + domain, file=outfile)
+                            print(address + " | " + domain, file=outfile)
                     try:
                         addresses.add(ipaddr(unicode(address)))
                     except NameError:
@@ -245,7 +242,11 @@ def get_dmarc(target):
 def get_dnssec(target, nameserver):
     out.verbose("Checking DNSSEC")
     request = dns.message.make_query(target, dns.rdatatype.DNSKEY, want_dnssec=True)
-    response = dns.query.udp(request, nameserver, timeout=1)
+    try:
+        response = dns.query.udp(request, nameserver, timeout=1)
+    except Exception as e:
+        out.warn("DNSSEC check failed against " + str(nameserver) + ": " + str(e) + "\n")
+        return
     if response.rcode() != 0:
         out.warn("DNSKEY lookup returned error code " + dns.rcode.to_text(response.rcode()) + "\n")
     else:
@@ -281,7 +282,7 @@ def get_mx(target):
         print(mx.to_text())
         if outfile:
             print(mx.to_text(), file=outfile)
-        mxsub = re.search(r'([a-z0-9.-]+)\.'+target, mx.to_text(), re.IGNORECASE)
+        mxsub = re.search(r'([a-z0-9.-]+)\.'+re.escape(target), mx.to_text(), re.IGNORECASE)
         try:
             if mxsub.group(1) and mxsub.group(1) not in wordlist:
                 queue.put(mxsub.group(1) + "." + target)
